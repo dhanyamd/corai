@@ -34,7 +34,9 @@ async def response_node(state: CoraiAgentState, config: RunnableConfig):
       code (str): The response or the code generated through the summary and the code provided. 
       It returns a code block containing all the changes as guided by the summary prompt.
     """
-    summary = state.get("summary")
+    summary = state.get("summary", "")
+    sandbox_err = state.get("sandbox_response_err", "")
+    print(f"sandbox error", sandbox_err) 
     print(f"summary: ", {summary})
     chain =  get_code_response(summary=summary)
     code_gen = await chain.ainvoke({"summary": summary, "messsages": state["messages"]}, config)
@@ -114,8 +116,8 @@ def sandbox_node(state: CoraiAgentState, sandbox: Sandbox):
         state["sandbox_response"] = proc.stdout.split('\n')
         state["code"] = actual_code_to_run
     else:
-        state["sandbox_response"] = proc.stderr.split('\n')
-        return {"sandbox_response", "response_node"}
+        state["sandbox_response_err"] = proc.stderr.split('\n')
+        return {"sandbox_response_err", "response_node"}
 
 def final_response(state: CoraiAgentState): 
     """
