@@ -1,3 +1,7 @@
+from typing import Optional
+from maya.settings import Settings
+from langchain_groq import ChatGroq
+
 def create_chat_model(model_name: str, temperature: float = 0.7) -> ChatGroq:
     """Create a ChatGroq model with the specified parameters."""
     return ChatGroq(
@@ -24,7 +28,7 @@ def get_chat_model(temperature: float = 0.7, max_retries: int = 3, retry_delay: 
         return create_chat_model(model_name, temperature)
     
     # Try with main model first
-    model = create_chat_model(settings.TEXT_MODEL_NAME, temperature)
+    model = create_chat_model(Settings.TEXT_MODEL_NAME, temperature)
     
     return model
     

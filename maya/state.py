@@ -14,6 +14,7 @@ class CoraiAgentState(MessageState):
     summary : list[str] | str
     code: list[str] | str
     sandbox_response : list[str] | str
+    sandbox_response_err : list[str] | str
     evaluation: bool
     final: list[str] | str
 

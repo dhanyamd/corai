@@ -117,7 +117,7 @@ def sandbox_node(state: CoraiAgentState, sandbox: Sandbox):
         state["code"] = actual_code_to_run
     else:
         state["sandbox_response_err"] = proc.stderr.split('\n')
-        return {"sandbox_response_err", "response_node"}
+    return state
 
 def final_response(state: CoraiAgentState): 
     """
