@@ -1,7 +1,7 @@
 def create_chat_model(model_name: str, temperature: float = 0.7) -> ChatGroq:
     """Create a ChatGroq model with the specified parameters."""
     return ChatGroq(
-        api_key=settings.GROQ_API_KEY,
+        api_key=Settings.GROQ_API_KEY,
         model_name=model_name,
         temperature=temperature,
     )

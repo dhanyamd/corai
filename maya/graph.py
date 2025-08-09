@@ -1,9 +1,10 @@
 from functools import lru_cache 
 from langgraph.graph import START, END, StateGraph 
-
+from maya.state import CoraiAgentState
+from .nodes import input_node
 @lru_cache(maxsize=1)
 def create_workflow_graph(): 
-    graph_builder = StateGraph(MessageState)
+    graph_builder = StateGraph(CoraiAgentState)
 
     graph_builder.add_node("input_router", input_router)
     graph_builder.add_node("reponse_node", response_node)
