@@ -1,8 +1,15 @@
 from functools import lru_cache
 from langgraph.graph import START, END, StateGraph
-from maya.state import CoraiAgentState
+from .state import CoraiAgentState
 from .nodes import input_node, sandbox_node, response_node, final_response
+from langsmith import traceable
+from .settings import Settings
 
+# Initialize LangSmith configuration
+settings = Settings()
+settings.configure_langsmith()
+
+@traceable
 def select_edge(state: CoraiAgentState):
     """
     Conditional edge function that determines the next node based on the sandbox execution result.
@@ -18,7 +25,9 @@ def select_edge(state: CoraiAgentState):
         return "response_node"  # Go back to response_node to regenerate code
     else:
         return "final_response"  # Proceed to final_response when successful
+
 @lru_cache(maxsize=1)
+@traceable
 def create_workflow_graph(): 
     graph_builder = StateGraph(CoraiAgentState)
 
@@ -42,4 +51,5 @@ def create_workflow_graph():
 )
 
     return graph_builder.add_edge("final_response", END)
+
 graph = create_workflow_graph().compile()

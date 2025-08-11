@@ -2,15 +2,20 @@
 name = "maya"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "beautifulsoup4>=4.13.3",
     "langchain>=0.3.21",
     "langchain-anthropic>=0.3.10",
+    "langchain-groq<=0.3.7",
     "langgraph>=0.3.21",
     "langgraph-reflection>=0.0.1",
     "openevals[e2b-code-interpreter]==0.0.15",
     "python-dotenv>=1.1.0",
+    "pydantic-settings>=2.0.0",
+    "langsmith>=0.3.32",
+    "e2b-code-interpreter>=0.0.15",
+    "pydantic>=2.7.4",
 ]
 
 [dependency-groups]

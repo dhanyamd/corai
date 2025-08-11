@@ -1,6 +1,6 @@
-from langgraph.graph import MessageState 
+from langgraph.graph import MessagesState
 
-class CoraiAgentState(MessageState): 
+class CoraiAgentState(MessagesState):
     """
     State class for ai agent workflow
 
