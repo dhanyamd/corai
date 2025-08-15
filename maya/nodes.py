@@ -2,6 +2,7 @@ from maya.chains import get_chain, get_code_response, get_instructions
 from maya.state import CoraiAgentState
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
+import re
 from e2b_code_interpreter import Sandbox
 from openevals.code.e2b.pyright import create_async_e2b_pyright_evaluator
 from langsmith import traceable
@@ -68,19 +69,13 @@ async def response_node(state: CoraiAgentState, config: RunnableConfig):
         # Add the error information to the summary
         summary_content = f"{summary_content}\n\nPrevious sandbox execution error:\n{error_content}"
     
-    # Escape curly braces in the summary to avoid parsing errors in prompt templates
+    # Always generate the code, but do not prepend instructions
     escaped_summary = summary_content.replace("{", "{{").replace("}", "}}") if summary_content else ""
-    chain =  get_code_response(summary=escaped_summary)
-    code_gen = await chain.ainvoke({"summary": escaped_summary, "messages": state["messages"]}, config)
-    instructions_chain = get_instructions(code_gen=code_gen)
-    instructions = await instructions_chain.ainvoke({"code": code_gen.content if hasattr(code_gen, 'content') else str(code_gen) })
+    code_chain = get_code_response(summary=escaped_summary)
+    code_gen = await code_chain.ainvoke({"summary": escaped_summary, "messages": state["messages"]}, config)
     
-    # Extract content from both instructions and code_gen
-    instructions_content = instructions.content if hasattr(instructions, 'content') else str(instructions)
-    code_gen_content = code_gen.content if hasattr(code_gen, 'content') else str(code_gen)
-    
-    # Combine the contents properly
-    code = instructions_content + code_gen_content
+    # Extract content from the code generation
+    code = code_gen.content if hasattr(code_gen, 'content') else str(code_gen)
     
     # Add the summary content as a new message to the messages list
     messages = state["messages"] + [HumanMessage(content=summary_content)]
@@ -96,9 +91,9 @@ def sandbox_node(state: CoraiAgentState):
     Returns:
      locals (dict | list[dict[str, any]]): The metadata response given by the sandbox agent after running the code.
     """
-    combined_code_and_instructions = state.get("code")
+    code = state.get("code")
 
-    if not combined_code_and_instructions:
+    if not code:
         # Handle the case where no code is provided
         state["sandbox_response"] = ["No code found in the state to run."]
         return state
@@ -107,34 +102,29 @@ def sandbox_node(state: CoraiAgentState):
     settings = Settings()
     with Sandbox(api_key=settings.E2B_API_KEY) as sandbox:
         # Extract content from AIMessage object if needed
-        if hasattr(combined_code_and_instructions, 'content'):
-            code_content = combined_code_and_instructions.content
+        if hasattr(code, 'content'):
+            code_content = code.content
         else:
-            code_content = str(combined_code_and_instructions)
+            code_content = str(code)
             
-        # Separate the instructions and the actual code
-        setup_commands = []
-        actual_code_lines = []
+        # Extract code from markdown block if present
+        code_match = re.search(r"```(?:python\n)?(.*)```", code_content, re.DOTALL)
+        if code_match:
+            code_content = code_match.group(1).strip()
 
-        for line in code_content.split('\n'):
-            line_stripped = line.strip()
-            # Check for commented commands (e.g., // npm install jest or # pip install)
-            if line_stripped.startswith('//') or line_stripped.startswith('#'):
-                # Extract the command, removing the comment markers and surrounding spaces
-                command = line_stripped.lstrip('//').lstrip('#').strip()
-                # Only add actual commands, not descriptive text
-                # Check if this looks like an actual command and doesn't contain descriptive text
-                if command and any(keyword in command for keyword in ['npm', 'npx', 'pip', 'python', 'yarn', 'jest', 'test', 'pytest']) and \
-                   not any(keyword in command for keyword in ['Install', 'Run', 'I\'m Corai', 'expert code generation', 'ready to help', 'understand']):
-                    # Additional filtering to remove descriptive text
-                    if not any(phrase in command for phrase in ['Generated unit tests', 'Using pytest as the testing framework']):
-                        setup_commands.append(command)
-            else:
-                # All other lines are considered actual code
-                actual_code_lines.append(line)
+        # The complex logic for separating setup commands and code is error-prone.
+        # We will treat the entire content as a self-contained script.
+        actual_code_to_run = code_content
+        
+        # Get the original code snippet from the messages
+        original_code_snippet = ""
+        if len(state["messages"]) > 1:
+            # Assuming the second message is the code snippet
+            if hasattr(state["messages"][1], 'content'):
+                original_code_snippet = state["messages"][1].content
 
-        # Re-join the actual code lines into a single string
-        actual_code_to_run = '\n'.join(actual_code_lines)
+        # Use the instructions from the state
+        setup_commands = ["pip install pytest", "python -m pytest"]
 
         # Filter setup commands to remove any conversational text that might have been included
         filtered_setup_commands = []
@@ -155,57 +145,20 @@ def sandbox_node(state: CoraiAgentState):
                         filtered_setup_commands.append(cmd_clean)
         setup_commands = filtered_setup_commands
 
-        # Determine a suitable filename based on the first command if possible
-        # This is a simple heuristic; a more robust solution might require a more complex parser
-        filename = 'script.js'  # Default to .js for JavaScript code
-        
-        # Check if this is a Python project based on code content
+        # Determine a suitable filename based on the project type
         is_python_project_content = (
             'def ' in actual_code_to_run and
-            ('import ' in actual_code_to_run or 'from ' in actual_code_to_run or 'pytest' in actual_code_to_run)
+            ('import ' in actual_code_to_run or 'from ' in actual_code_to_run or 'unittest' in actual_code_to_run or 'pytest' in actual_code_to_run)
         )
-        
-        if setup_commands:
-            # Filter out conversational text and only keep actual commands
-            filtered_setup_commands = []
-            for cmd in setup_commands:
-                # Check if this looks like an actual command and doesn't contain descriptive text
-                if any(keyword in cmd for keyword in ['npm', 'npx', 'pip', 'python', 'yarn', 'jest', 'test', 'pytest']) and \
-                   not any(keyword in cmd for keyword in ['Install', 'Run', 'I\'m Corai', 'expert code generation', 'ready to help', 'understand']):
-                    # Additional check to ensure this is a valid command
-                    cmd_clean = cmd.strip()
-                    # Check if the command contains only valid command characters and doesn't have conversational phrases
-                    if cmd_clean and all(c.isalnum() or c in [' ', '-', '_', '.', '/', '@', ':', '=', '#'] for c in cmd_clean) and \
-                       not any(phrase in cmd_clean for phrase in ['Please', 'I\'m ready', 'Let\'s get started', 'provide the code', 'review the code', 'You\'ve provided', 'You\'ve asked']):
-                        filtered_setup_commands.append(cmd_clean)
-            
-            if filtered_setup_commands:
-                first_command_parts = filtered_setup_commands[0].split()
-                if len(first_command_parts) > 1 and first_command_parts[1] == 'jest':
-                    filename = 'index.test.js'
-                elif first_command_parts[0] == 'npx' and len(first_command_parts) > 1 and first_command_parts[1] == 'jest':
-                    filename = 'index.test.js'
-                elif first_command_parts[0] == 'pytest':
-                    filename = 'test_script.py'
-                elif 'pip' in first_command_parts:
-                    filename = 'main.py'
-                elif 'npm' in first_command_parts:
-                    filename = 'index.js'
-                # Check if we have a package.json file to determine if it's a Node.js project
-                elif any('package.json' in line for line in actual_code_lines):
-                    filename = 'index.js'
-            else:
-                # If no valid setup commands, try to determine file type from code content
-                if is_python_project_content:
-                    filename = 'test_script.py'
-                elif 'function ' in actual_code_to_run or 'const ' in actual_code_to_run or 'let ' in actual_code_to_run:
-                    filename = 'script.js'
+
+        if is_python_project_content:
+            filename = 'test_script.py'
         else:
-            # If no setup commands, try to determine file type from code content
-            if is_python_project_content:
-                filename = 'test_script.py'
-            elif 'function ' in actual_code_to_run or 'const ' in actual_code_to_run or 'let ' in actual_code_to_run:
-                filename = 'script.js'
+            # Default for JS or other types
+            filename = 'script.js'
+            # A more robust check for JS tests
+            if 'describe(' in actual_code_to_run or 'it(' in actual_code_to_run:
+                 filename = 'index.test.js'
         
         # Instead of writing the file directly, we'll include the code in the full_script
         # which will create the file when executed
@@ -216,120 +169,30 @@ def sandbox_node(state: CoraiAgentState):
         is_python_project = filename.endswith('.py') or is_python_project_content or 'pytest' in actual_code_to_run or 'pip' in actual_code_to_run
 
         # Combine all setup and execution commands into a single command string
-        # We use '&&' to ensure that the next command only runs if the previous one was successful
-        # This includes writing the file and then running the tests.
-        # Use base64 encoding to properly handle special characters in the code
         import base64
-        encoded_code = base64.b64encode(actual_code_to_run.encode('utf-8')).decode('utf-8')
-        # Use a more robust approach for base64 decoding that works across different systems
-        full_script = f"python -c \"import base64; decoded = base64.b64decode('{encoded_code}'); open('{filename}', 'wb').write(decoded)\""
         
-        # Check if we need to install pytest and run tests for Python projects
-        need_pytest = is_python_project and ('test' in filename or filename.endswith('.py'))
+        # Update the import statement in the test code
+        actual_code_to_run = actual_code_to_run.replace("from your_module", "from module_to_test")
         
-        # Add pytest installation and execution only if needed
-        if need_pytest:
-            full_script += " && pip install pytest && python -m pytest -v"
+        # Encode the test code
+        encoded_test_code = base64.b64encode(actual_code_to_run.encode('utf-8')).decode('utf-8')
+        write_test_code_cmd = f"python -c \"import base64; decoded = base64.b64decode('{encoded_test_code}'); open('{filename}', 'wb').write(decoded)\""
         
-        if is_python_project:
-            # For Python projects, we need to handle the case where we have tests
-            if 'test' in filename or filename.endswith('.py'):
-                # If this is a test file, we need to also create the quicksort function
-                if 'import' in actual_code_to_run and 'quicksort' in actual_code_to_run:
-                    # Create a separate file for the quicksort function
-                    quicksort_code = """def quicksort(arr):
-    if len(arr) <= 1:
-        return arr
-    else:
-        pivot = arr[len(arr) // 2]
-        left = [x for x in arr if x < pivot]
-        middle = [x for x in arr if x == pivot]
-        right = [x for x in arr if x > pivot]
-        return quicksort(left) + middle + quicksort(right)
-"""
-                    encoded_quicksort = base64.b64encode(quicksort_code.encode('utf-8')).decode('utf-8')
-                    full_script = f"echo {encoded_quicksort} | base64 -d > quicksort.py && echo {encoded_code} | base64 -d > {filename}"
-                    # Modify the test code to import from the correct module
-                    full_script += " && sed -i 's/from your_module import quicksort/from quicksort import quicksort/g' " + filename
-                    # Fix the test for large array
-                    full_script += " && sed -i 's/range(101)]/range(101)]/g' " + filename
-                    # Fix the test for large array with negative numbers
-                    full_script += " && sed -i 's/range(100, -1, -1)]/range(100, -1, -1)]/g' " + filename
+        # Start with an empty script
+        full_script = ""
+        
+        # If we have the original code, write it to a separate file
+        if original_code_snippet:
+            encoded_original_code = base64.b64encode(original_code_snippet.encode('utf-8')).decode('utf-8')
+            write_original_code_cmd = f"python -c \"import base64; decoded = base64.b64decode('{encoded_original_code}'); open('module_to_test.py', 'wb').write(decoded)\""
+            full_script += f"{write_original_code_cmd} && "
             
-            # Install dependencies and run tests
-            python_commands = []
-            for cmd in filtered_setup_commands:
-                # Check if this looks like an actual Python command
-                if any(keyword in cmd for keyword in ['pip', 'python', 'pytest']) and \
-                   not any(keyword in cmd for keyword in ['Install', 'Run', 'I\'m Corai', 'expert code generation', 'ready to help', 'understand']):
-                    python_commands.append(cmd)
-            if python_commands:
-                # Filter out any non-command text from python_commands
-                valid_commands = []
-                for cmd in python_commands:
-                    # Check if this looks like an actual command
-                    if any(keyword in cmd for keyword in ['pip', 'python', 'pytest']) and \
-                       not any(keyword in cmd for keyword in ['Install', 'Run', 'I\'m Corai', 'expert code generation', 'ready to help', 'understand']):
-                        # Additional check to ensure this is a valid command
-                        cmd_clean = cmd.strip()
-                        # Check if the command contains only valid command characters and doesn't have conversational phrases
-                        if cmd_clean and all(c.isalnum() or c in [' ', '-', '_', '.', '/', '@', ':', '=', '#'] for c in cmd_clean) and \
-                           not any(phrase in cmd_clean for phrase in ['Please', 'I\'m ready', 'Let\'s get started', 'provide the code', 'review the code', 'You\'ve provided', 'You\'ve asked', 'Based on the provided', 'Here is the generated', 'Here is the rewritten code', 'Using pytest as the testing framework']):
-                            valid_commands.append(cmd_clean)
-                if valid_commands:
-                    # Only add commands that are not already in the full_script
-                    unique_commands = []
-                    for cmd in valid_commands:
-                        if cmd not in full_script:
-                            unique_commands.append(cmd)
-                    if unique_commands:
-                        full_script += " && " + ' && '.join(unique_commands)
-                    # Always run pytest after installing dependencies
-                    if "python -m pytest" not in full_script:
-                        full_script += " && python -m pytest -v"
-                else:
-                    # If no valid commands were found, default to running pytest if it's a Python test file
-                    if need_pytest and "pip install pytest" not in full_script:
-                        full_script += " && pip install pytest && python -m pytest -v"
-            else:
-                # If no setup commands were found, default to running pytest if it's a Python test file
-                if need_pytest and "pip install pytest" not in full_script:
-                    full_script += " && pip install pytest && python -m pytest -v"
-        elif is_js_project:
-            # For JavaScript projects, we need to install dependencies first
-            full_script += " && npm install && npm test"
-        elif setup_commands:
-            # Filter out any non-command text from setup_commands for other projects
-            filtered_commands = []
-            for cmd in filtered_setup_commands:
-                # Check if this looks like an actual command
-                if any(keyword in cmd for keyword in ['npm', 'npx', 'pip', 'python', 'yarn', 'jest', 'test', 'pytest']) and \
-                   not any(keyword in cmd for keyword in ['Install', 'Run', 'I\'m Corai', 'expert code generation', 'ready to help', 'understand']):
-                    # Additional filtering to remove descriptive text
-                    if not any(phrase in cmd for phrase in ['Generated unit tests', 'Using pytest as the testing framework']):
-                        # Only add commands that are not already in the full_script
-                        if cmd not in full_script:
-                            filtered_commands.append(cmd)
-            if filtered_commands:
-                full_script += " && " + ' && '.join(filtered_commands)
-        elif setup_commands:
-            # Filter out any non-command text from setup_commands for other projects
-            filtered_commands = []
-            for cmd in filtered_setup_commands:
-                # Check if this looks like an actual command
-                if any(keyword in cmd for keyword in ['npm', 'npx', 'pip', 'python', 'yarn', 'jest', 'test', 'pytest']) and \
-                   not any(keyword in cmd for keyword in ['Install', 'Run', 'I\'m Corai', 'expert code generation', 'ready to help', 'understand']):
-                    # Additional filtering to remove descriptive text
-                    if not any(phrase in cmd for phrase in ['Generated unit tests', 'Using pytest as the testing framework']):
-                        filtered_commands.append(cmd)
-            if filtered_commands:
-                # Only add commands that are not already in the full_script
-                unique_commands = []
-                for cmd in filtered_commands:
-                    if cmd not in full_script:
-                        unique_commands.append(cmd)
-                if unique_commands:
-                    full_script += " && " + ' && '.join(unique_commands)
+        # Add the command to write the test file
+        full_script += write_test_code_cmd
+        
+        # Add setup commands
+        if filtered_setup_commands:
+            full_script += " && " + " && ".join(filtered_setup_commands)
         
         # Debug output
         print(f"Debug - filename: {filename}")
@@ -343,14 +206,21 @@ def sandbox_node(state: CoraiAgentState):
             proc = sandbox.commands.run(cmd=full_script, timeout=30000)  # 30 second timeout
 
             # Set the sandbox_response in the state dictionary
-            if proc.exit_code == 0:
+            if proc.exit_code == 0 or ("pytest" in full_script and proc.exit_code == 1):
                 # Store both the output and the code that generated it
+                # For pytest, a non-zero exit code can mean test failures, which is a valid result.
+                output = proc.stdout.split('\n')
+                if proc.stderr:
+                    output.extend(["--- STDERR ---", *proc.stderr.split('\n')])
+
                 state["sandbox_response"] = {
-                    "output": proc.stdout.split('\n'),
+                    "output": output,
                     "code": actual_code_to_run
                 }
                 # Also store the code separately for backward compatibility
                 state["code"] = actual_code_to_run
+                if "sandbox_response_err" in state:
+                    del state["sandbox_response_err"]
             else:
                 # Store both the error output and the code that generated it
                 state["sandbox_response_err"] = {

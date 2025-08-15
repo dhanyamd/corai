@@ -106,10 +106,11 @@ def get_instructions(code_gen: str = ""):
         escaped_instructions_prompt = INSTRUCTIONS_PROMPT.replace("{", "{{").replace("}", "}}")
         # Then, escape the code_gen content
         escaped_code_gen = code_gen_content.replace("{", "{{").replace("}", "}}")
-        system_message = escaped_instructions_prompt + f"\n\nThis is the summary of the user's prompt or query {escaped_code_gen}. Please provide the necessary instructions/ commands to install all the dependencies and set up the environments"
+        system_message = escaped_instructions_prompt + f"\n\nThis is the code to be tested:\n{escaped_code_gen}"
     else:
         system_message = INSTRUCTIONS_PROMPT.replace("{", "{{").replace("}", "}}")
     instructions = ChatPromptTemplate.from_messages([
-        ("system", system_message)
+        ("system", system_message),
+        MessagesPlaceholder(variable_name="messages"),
     ])
     return instructions | model

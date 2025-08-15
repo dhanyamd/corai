@@ -21,10 +21,24 @@ def select_edge(state: CoraiAgentState):
         str: The name of the next node to route to
     """
     # Check if there's an error from the sandbox execution
-    if state.get("sandbox_response_err"):
-        return "response_node"  # Go back to response_node to regenerate code
-    else:
-        return "final_response"  # Proceed to final_response when successful
+    sandbox_err = state.get("sandbox_response_err")
+    if sandbox_err:
+        error_str = str(sandbox_err).lower()
+        # Check for critical errors that should not be retried as they are likely
+        # environment or setup issues, not problems with the generated code.
+        if (
+            "exit code 1" in error_str  # pytest: tests failed
+            or "exit code 5" in error_str  # pytest: no tests collected
+            or "getaddrinfo failed" in error_str  # Network error
+            or "command exited with code 2" in error_str  # Sandbox interruption
+        ):
+            return "final_response"
+        
+        # For other errors, attempt to regenerate the code
+        return "response_node"
+    
+    # If there is no error, the sandbox execution was successful
+    return "final_response"
 
 @lru_cache(maxsize=1)
 @traceable
@@ -50,6 +64,7 @@ def create_workflow_graph():
     }
 )
 
-    return graph_builder.add_edge("final_response", END)
+    graph_builder.add_edge("final_response", END)
+    return graph_builder
 
 graph = create_workflow_graph().compile()

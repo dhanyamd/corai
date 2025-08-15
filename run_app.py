@@ -9,8 +9,8 @@ from langchain_core.messages import HumanMessage
 
 async def main():
     # Example input - replace with your own
-    input_message = """can you write unit tests for this using pytest?
-    def calculate_discount(price, discount_percentage):
+    instruction = "can you write unit tests for this?"
+    code_snippet = """def calculate_discount(price, discount_percentage):
    
         if price < 0 or discount_percentage < 0:
             raise ValueError("Price and discount percentage must be non-negative.")
@@ -18,11 +18,13 @@ async def main():
         discount_amount = price * (discount_percentage / 100)
         final_price = price - discount_amount
         return final_price
-    
     """
-    # Create the input state
+    # Create the input state with separate messages for instruction and code
     input_state = {
-        "messages": [HumanMessage(content=input_message)]
+        "messages": [
+            HumanMessage(content=instruction),
+            HumanMessage(content=code_snippet)
+        ]
     }
     
     # Run the graph with increased recursion limit

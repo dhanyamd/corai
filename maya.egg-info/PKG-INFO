@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: maya
+Version: 0.1.0
+Summary: Add your description here
+Requires-Python: >=3.13
+Requires-Dist: beautifulsoup4>=4.13.3
+Requires-Dist: langchain>=0.3.21
+Requires-Dist: langchain-anthropic>=0.3.10
+Requires-Dist: langchain-groq<=0.3.7
+Requires-Dist: langgraph>=0.3.21
+Requires-Dist: langgraph-reflection>=0.0.1
+Requires-Dist: openevals[e2b-code-interpreter]==0.0.15
+Requires-Dist: python-dotenv>=1.1.0
+Requires-Dist: pydantic-settings>=2.0.0
+Requires-Dist: langsmith>=0.3.32
+Requires-Dist: e2b-code-interpreter>=0.0.15
+Requires-Dist: pydantic>=2.7.4
