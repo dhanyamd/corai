@@ -123,28 +123,6 @@ def sandbox_node(state: CoraiAgentState):
             if hasattr(state["messages"][1], 'content'):
                 original_code_snippet = state["messages"][1].content
 
-        # Use the instructions from the state
-        setup_commands = ["pip install pytest", "python -m pytest"]
-
-        # Filter setup commands to remove any conversational text that might have been included
-        filtered_setup_commands = []
-        for cmd in setup_commands:
-            # Check if this looks like an actual command and doesn't contain descriptive text
-            if any(keyword in cmd for keyword in ['npm', 'npx', 'pip', 'python', 'yarn', 'jest', 'test', 'pytest']) and \
-               not any(keyword in cmd for keyword in ['Install', 'Run', 'I\'m Corai', 'expert code generation', 'ready to help', 'understand']):
-                # Additional check to ensure this is a valid command
-                cmd_clean = cmd.strip()
-                # Check if the command contains only valid command characters and doesn't have conversational phrases
-                if cmd_clean and all(c.isalnum() or c in [' ', '-', '_', '.', '/', '@', ':', '=', '#'] for c in cmd_clean) and \
-                   not any(phrase in cmd_clean for phrase in ['Please', 'I\'m ready', 'Let\'s get started', 'provide the code', 'review the code', 'You\'ve provided', 'You\'ve asked', 'Based on the provided', 'Here is the generated', 'Here is the rewritten code', 'Using pytest as the testing framework', 'Generated unit tests for the calculate_discount function']):
-                    # Remove any conversational text that might be appended to the command
-                    cmd_clean = cmd_clean.split('Here is the generated')[0].strip()
-                    cmd_clean = cmd_clean.split('Here is the rewritten code')[0].strip()
-                    # Additional filtering to remove descriptive text
-                    if not any(phrase in cmd_clean for phrase in ['Generated unit tests', 'Using pytest as the testing framework']):
-                        filtered_setup_commands.append(cmd_clean)
-        setup_commands = filtered_setup_commands
-
         # Determine a suitable filename based on the project type
         is_python_project_content = (
             'def ' in actual_code_to_run and
@@ -154,19 +132,10 @@ def sandbox_node(state: CoraiAgentState):
         if is_python_project_content:
             filename = 'test_script.py'
         else:
-            # Default for JS or other types
             filename = 'script.js'
-            # A more robust check for JS tests
-            if 'describe(' in actual_code_to_run or 'it(' in actual_code_to_run:
-                 filename = 'index.test.js'
-        
-        # Instead of writing the file directly, we'll include the code in the full_script
-        # which will create the file when executed
-
-        # Check if this is a JavaScript project with a package.json
-        is_js_project = 'package.json' in actual_code_to_run
-        # Check if this is a Python project
-        is_python_project = filename.endswith('.py') or is_python_project_content or 'pytest' in actual_code_to_run or 'pip' in actual_code_to_run
+            
+        # Determine the test runner
+        test_runner = 'unittest'
 
         # Combine all setup and execution commands into a single command string
         import base64
@@ -190,48 +159,42 @@ def sandbox_node(state: CoraiAgentState):
         # Add the command to write the test file
         full_script += write_test_code_cmd
         
-        # Add setup commands
-        if filtered_setup_commands:
-            full_script += " && " + " && ".join(filtered_setup_commands)
+        # Add setup and execution commands based on the test runner
+        if test_runner == 'unittest':
+            full_script += f" && python -m unittest {filename}"
+        elif test_runner == 'pytest':
+            full_script += f" && pip install pytest && python -m pytest"
         
         # Debug output
         print(f"Debug - filename: {filename}")
-        print(f"Debug - is_js_project: {is_js_project}")
-        print(f"Debug - is_python_project: {is_python_project}")
-        print(f"Debug - setup_commands: {setup_commands}")
         print(f"Debug - full_script: {full_script}")
         
         # Run the combined script using the generic `run_command`
         try:
             proc = sandbox.commands.run(cmd=full_script, timeout=30000)  # 30 second timeout
+            output = proc.stdout.split('\n')
+            if proc.stderr:
+                output.extend(["--- STDERR ---", *proc.stderr.split('\n')])
 
-            # Set the sandbox_response in the state dictionary
-            if proc.exit_code == 0 or ("pytest" in full_script and proc.exit_code == 1):
-                # Store both the output and the code that generated it
-                # For pytest, a non-zero exit code can mean test failures, which is a valid result.
-                output = proc.stdout.split('\n')
-                if proc.stderr:
-                    output.extend(["--- STDERR ---", *proc.stderr.split('\n')])
-
-                state["sandbox_response"] = {
-                    "output": output,
-                    "code": actual_code_to_run
-                }
-                # Also store the code separately for backward compatibility
-                state["code"] = actual_code_to_run
+            if proc.exit_code == 0:
+                # Success: Tests passed
+                state["sandbox_response"] = {"output": output, "code": actual_code_to_run}
                 if "sandbox_response_err" in state:
                     del state["sandbox_response_err"]
+            elif proc.exit_code == 1:
+                # Retryable error: Test failure
+                state["sandbox_response_err"] = {"error": output, "code": actual_code_to_run}
             else:
-                # Store both the error output and the code that generated it
-                state["sandbox_response_err"] = {
-                    "error": proc.stderr.split('\n') if proc.stderr else ["Command failed with exit code: " + str(proc.exit_code)],
-                    "code": actual_code_to_run
-                }
+                # Non-retryable error: Other sandbox error
+                state["sandbox_response"] = {"output": output, "code": actual_code_to_run}
+                if "sandbox_response_err" in state:
+                    del state["sandbox_response_err"]
+
         except Exception as e:
-            # Handle any exceptions that occur during command execution
+            # Retryable error: Sandbox execution exception (e.g., timeout)
             state["sandbox_response_err"] = {
                 "error": [f"Exception occurred: {str(e)}"],
-                "code": actual_code_to_run
+                "code": actual_code_to_run,
             }
         return state
 

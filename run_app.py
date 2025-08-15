@@ -11,14 +11,13 @@ async def main():
     # Example input - replace with your own
     instruction = "can you write unit tests for this?"
     code_snippet = """def calculate_discount(price, discount_percentage):
-   
-        if price < 0 or discount_percentage < 0:
-            raise ValueError("Price and discount percentage must be non-negative.")
+    if price < 0 or discount_percentage < 0:
+        raise ValueError("Price and discount percentage must be non-negative.")
 
-        discount_amount = price * (discount_percentage / 100)
-        final_price = price - discount_amount
-        return final_price
-    """
+    discount_amount = price * (discount_percentage / 100)
+    final_price = price - discount_amount
+    return final_price
+"""
     # Create the input state with separate messages for instruction and code
     input_state = {
         "messages": [
