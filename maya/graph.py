@@ -23,7 +23,7 @@ def select_edge(state: CoraiAgentState):
     # If sandbox_response_err exists, we retry. Otherwise, we're done.
     if "sandbox_response_err" in state and state["sandbox_response_err"]:
         return "response_node"
-    return "final_response"
+    return "final_response_node"
 
 @lru_cache(maxsize=1)
 @traceable
@@ -33,7 +33,7 @@ def create_workflow_graph():
     graph_builder.add_node("input_router", input_node)
     graph_builder.add_node("response_node", response_node)
     graph_builder.add_node("sandbox_node", sandbox_node)
-    graph_builder.add_node("final_response", final_response)
+    graph_builder.add_node("final_response_node", final_response)
 
     graph_builder.add_edge(START, "input_router")
     graph_builder.add_edge("input_router", "response_node")
@@ -44,12 +44,12 @@ def create_workflow_graph():
     "sandbox_node",
      select_edge,
     {
-        "response_node": "response_node",
-        "final_response": "final_response"
+    "response_node": "response_node",
+    "final_response_node": "final_response_node"
     }
 )
 
-    graph_builder.add_edge("final_response", END)
+    graph_builder.add_edge("final_response_node", END)
     return graph_builder
 
 graph = create_workflow_graph().compile()

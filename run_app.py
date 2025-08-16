@@ -30,17 +30,18 @@ async def main():
     result = await graph.ainvoke(input_state, {"recursion_limit": 200})
     
     print("Final result:")
-    final_response = result.get("final_response", "No final response found")
+    final_response = result.get("final_response", {})
+    
+    # The output is now a simple dictionary with "output" and "code" keys.
     if isinstance(final_response, dict):
-        print("Status:", final_response.get("status", "Unknown"))
-        print("Description:", final_response.get("description", ""))
-        print("Output:")
+        print("\n--- Sandbox Output ---")
+        print("(Note: The 'unittest' library prints to STDERR by default, even on success.)")
         for line in final_response.get("output", []):
             print(line)
-        print("Code:")
+        print("\n--- Code Executed ---")
         print(final_response.get("code", ""))
     else:
-        print(final_response)
+        print("No final response found.")
 
 if __name__ == "__main__":
     asyncio.run(main())

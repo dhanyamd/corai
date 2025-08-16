@@ -60,17 +60,10 @@ def get_code_response(summary: str = ""):
         temperature=0.5,
         model_name=settings.TEXT_MODEL_NAME
     )
-    if summary:
-        # Escape curly braces in the summary to avoid parsing errors
-        # First, escape the SYSTEM_PROMPT's own template variables
-        escaped_system_prompt = SYSTEM_PROMPT.replace("{", "{{").replace("}", "}}")
-        # Then, escape the summary content
-        escaped_summary = summary.replace("{", "{{").replace("}", "}}")
-        system_message = escaped_system_prompt + f"\n\nThis is the summary of the user's prompt or query {escaped_summary}"
-    else:
-        system_message = SYSTEM_PROMPT.replace("{", "{{").replace("}", "}}")
+    system_message = SYSTEM_PROMPT
     code_response = ChatPromptTemplate.from_messages([
-        ("system", system_message)
+        ("system", system_message),
+        MessagesPlaceholder(variable_name="messages"),
     ])
     return code_response | model
 
