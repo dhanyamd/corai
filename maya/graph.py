@@ -22,7 +22,7 @@ def select_edge(state: CoraiAgentState):
     """
     # If sandbox_response_err exists, we retry. Otherwise, we're done.
     if "sandbox_response_err" in state and state["sandbox_response_err"]:
-        return "response_node"
+        return "final_response_node"
     return "final_response_node"
 
 @lru_cache(maxsize=1)
