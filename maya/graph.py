@@ -20,9 +20,8 @@ def select_edge(state: CoraiAgentState):
     Returns:
         str: The name of the next node to route to
     """
-    # If sandbox_response_err exists, we retry. Otherwise, we're done.
-    if "sandbox_response_err" in state and state["sandbox_response_err"]:
-        return "final_response_node"
+    if "sandbox_response_err" in state and state["sandbox_response_err"] and state.get("retry_count", 0) < 3:
+        return "response_node"
     return "final_response_node"
 
 @lru_cache(maxsize=1)

@@ -15,7 +15,7 @@ async def input_node(state: CoraiAgentState, config: RunnableConfig):
     chain = get_chain()
     response = await chain.ainvoke({"initial_prompt": initial_prompt, "messages": initial_prompt}, config)
     summary = response.content if hasattr(response, 'content') else str(response)
-    return {"summary": summary}
+    return {"summary": summary, "retry_count": 0}
     
 @traceable
 async def response_node(state: CoraiAgentState, config: RunnableConfig):
@@ -32,7 +32,8 @@ async def response_node(state: CoraiAgentState, config: RunnableConfig):
     code = code_gen.content if hasattr(code_gen, 'content') else str(code_gen)
     
     messages = state["messages"] + [HumanMessage(content=summary_content)]
-    return {"code": AIMessage(content=code), "messages": messages}
+    retry_count = state.get("retry_count", 0) + 1
+    return {"code": AIMessage(content=code), "messages": messages, "retry_count": retry_count}
 
 @traceable
 def sandbox_node(state: CoraiAgentState):

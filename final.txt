@@ -1,0 +1,144 @@
+THIS IS THE OUTPUT : 
+****
+Final result:
+
+--- Sandbox Output ---
+(Note: The 'unittest' library prints to STDERR by default, even on success.)
+Exception: Command exited with code 1 and error:
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+FAIL ./test.spec.js
+  GET /api/users
+    ✓ returns all users (44 ms)
+  GET /api/users/:id
+    ✓ returns a user by ID (6 ms)
+    ✓ returns 404 for non-existent user ID (6 ms)
+  POST /api/users
+    ✓ creates a new user (21 ms)
+    ✓ returns 400 for missing name or email (14 ms)
+  PUT /api/users/:id
+    ✓ updates a user by ID (31 ms)
+    ✕ returns 404 for non-existent user ID (11 ms)
+  DELETE /api/users/:id
+    ✓ deletes a user by ID (5 ms)
+    ✕ returns 404 for non-existent user ID (4 ms)
+
+  ● PUT /api/users/:id › returns 404 for non-existent user ID
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 404
+    Received: 200
+
+      58 |   it('returns 404 for non-existent user ID', async () => {
+      59 |     const res = await request(app).put('/api/users/3');
+    > 60 |     expect(res.status).toBe(404);
+         |                        ^
+      61 |     expect(res.body).toEqual({ message: 'User not found' });
+      62 |   });
+      63 | });
+
+      at Object.toBe (test.spec.js:60:24)
+
+  ● DELETE /api/users/:id › returns 404 for non-existent user ID
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 404
+    Received: 204
+
+      71 |   it('returns 404 for non-existent user ID', async () => {
+      72 |     const res = await request(app).delete('/api/users/3');
+    > 73 |     expect(res.status).toBe(404);
+         |                        ^
+      74 |     expect(res.body).toEqual({ message: 'User not found' });
+      75 |   });
+      76 | });
+
+      at Object.toBe (test.spec.js:73:24)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 7 passed, 9 total
+Snapshots:   0 total
+Time:        1.026 s
+Ran all test suites matching test.spec.js.
+
+
+--- Code Executed ---
+const request = require('supertest');
+const app = require('./app'); // assuming the app is in a file called app.js
+
+describe('GET /api/users', () => {
+  it('returns all users', async () => {
+    const res = await request(app).get('/api/users');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      { id: 1, name: 'Alice Smith', email: 'alice@example.com' },
+      { id: 2, name: 'Bob Johnson', email: 'bob@example.com' },
+    ]);
+  });
+});
+
+describe('GET /api/users/:id', () => {
+  it('returns a user by ID', async () => {
+    const res = await request(app).get('/api/users/1');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ id: 1, name: 'Alice Smith', email: 'alice@example.com' });
+  });
+
+  it('returns 404 for non-existent user ID', async () => {
+    const res = await request(app).get('/api/users/3');
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ message: 'User not found' });
+  });
+});
+
+describe('POST /api/users', () => {
+  it('creates a new user', async () => {
+    const res = await request(app).post('/api/users').send({ name: 'Charlie Brown', email: 'charlie@example.com' });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({
+      id: 3,
+      name: 'Charlie Brown',
+      email: 'charlie@example.com',
+    });
+  });
+
+  it('returns 400 for missing name or email', async () => {
+    const res = await request(app).post('/api/users').send({ name: 'Charlie Brown' });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: 'Name and email are required' });
+
+    const res2 = await request(app).post('/api/users').send({ email: 'charlie@example.com' });
+    expect(res2.status).toBe(400);
+    expect(res2.body).toEqual({ message: 'Name and email are required' });
+  });
+});
+
+describe('PUT /api/users/:id', () => {
+  it('updates a user by ID', async () => {
+    const res = await request(app).put('/api/users/1').send({ name: 'Alice Updated', email: 'alice.updated@example.com' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ id: 1, name: 'Alice Updated', email: 'alice.updated@example.com' });
+  });
+
+  it('returns 404 for non-existent user ID', async () => {
+    const res = await request(app).put('/api/users/3');
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ message: 'User not found' });
+  });
+});
+
+describe('DELETE /api/users/:id', () => {
+  it('deletes a user by ID', async () => {
+    const res = await request(app).delete('/api/users/1');
+    expect(res.status).toBe(204);
+  });
+
+  it('returns 404 for non-existent user ID', async () => {
+    const res = await request(app).delete('/api/users/3');
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ message: 'User not found' });
+  });
+});
+***

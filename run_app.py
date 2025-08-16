@@ -20,20 +20,20 @@ const PORT = process.env.PORT || 3000;
 app.use(bodyParser.json());
 
 // In a real application, this would be a database
-let users = [
+app.users = [
   { id: 1, name: 'Alice Smith', email: 'alice@example.com' },
   { id: 2, name: 'Bob Johnson', email: 'bob@example.com' },
 ];
 
 // GET all users
 app.get('/api/users', (req, res) => {
-  res.status(200).json(users);
+  res.status(200).json(app.users);
 });
 
 // GET user by ID
 app.get('/api/users/:id', (req, res) => {
   const id = parseInt(req.params.id);
-  const user = users.find(u => u.id === id);
+  const user = app.users.find(u => u.id === id);
 
   if (user) {
     res.status(200).json(user);
@@ -50,21 +50,21 @@ app.post('/api/users', (req, res) => {
   }
 
   const newUser = {
-    id: users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1,
+    id: app.users.length > 0 ? Math.max(...app.users.map(u => u.id)) + 1 : 1,
     name,
     email,
   };
-  users.push(newUser);
+  app.users.push(newUser);
   res.status(201).json(newUser);
 });
 
 // PUT (update) a user by ID
 app.put('/api/users/:id', (req, res) => {
   const id = parseInt(req.params.id);
-  const { name, email } = req.body;
+  const { name, email } = req.body || {};
 
   let userFound = false;
-  users = users.map(user => {
+  app.users = app.users.map(user => {
     if (user.id === id) {
       userFound = true;
       return { ...user, name: name || user.name, email: email || user.email };
@@ -73,7 +73,7 @@ app.put('/api/users/:id', (req, res) => {
   });
 
   if (userFound) {
-    res.status(200).json(users.find(u => u.id === id));
+    res.status(200).json(app.users.find(u => u.id === id));
   } else {
     res.status(404).json({ message: 'User not found' });
   }
@@ -82,10 +82,10 @@ app.put('/api/users/:id', (req, res) => {
 // DELETE a user by ID
 app.delete('/api/users/:id', (req, res) => {
   const id = parseInt(req.params.id);
-  const initialLength = users.length;
-  users = users.filter(user => user.id !== id);
+  const initialLength = app.users.length;
+  app.users = app.users.filter(user => user.id !== id);
 
-  if (users.length < initialLength) {
+  if (app.users.length < initialLength) {
     res.status(204).send(); // No content for successful deletion
   } else {
     res.status(404).json({ message: 'User not found' });
