@@ -30,6 +30,15 @@ def get_code_response(summary: str = ""):
     return code_response | model
 
 @traceable
+def get_fixer_chain():
+    model = get_chat_model(temperature=0.5, model_name=settings.TEXT_MODEL_NAME)
+    fixer_prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are a code-fixing AI. You will be given a piece of code, a failing test, and an error message. Your task is to fix the code so that it passes the test. You must return only the corrected code, enclosed in a markdown block. Do not include any other text, explanations, or apologies."),
+        MessagesPlaceholder(variable_name="messages"),
+    ])
+    return fixer_prompt | model
+
+@traceable
 def get_instructions(code_gen: str = ""):
     model = get_chat_model(temperature=0.5, model_name=settings.TEXT_MODEL_NAME)
     instructions = ChatPromptTemplate.from_messages([

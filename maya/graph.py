@@ -1,7 +1,7 @@
 from functools import lru_cache
 from langgraph.graph import START, END, StateGraph
 from .state import CoraiAgentState
-from .nodes import input_node, sandbox_node, response_node, final_response
+from .nodes import input_node, sandbox_node, response_node, final_response, code_fixer_node
 from langsmith import traceable
 from .settings import Settings
 
@@ -21,7 +21,7 @@ def select_edge(state: CoraiAgentState):
         str: The name of the next node to route to
     """
     if "sandbox_response_err" in state and state["sandbox_response_err"] and state.get("retry_count", 0) < 3:
-        return "response_node"
+        return "code_fixer_node"
     return "final_response_node"
 
 @lru_cache(maxsize=1)
@@ -32,18 +32,20 @@ def create_workflow_graph():
     graph_builder.add_node("input_router", input_node)
     graph_builder.add_node("response_node", response_node)
     graph_builder.add_node("sandbox_node", sandbox_node)
+    graph_builder.add_node("code_fixer_node", code_fixer_node)
     graph_builder.add_node("final_response_node", final_response)
 
     graph_builder.add_edge(START, "input_router")
     graph_builder.add_edge("input_router", "response_node")
     graph_builder.add_edge("response_node", "sandbox_node")
+    graph_builder.add_edge("code_fixer_node", "sandbox_node")
     # Remove the direct edge from sandbox_node to final_response as it's handled by conditional edges
 
     graph_builder.add_conditional_edges(
     "sandbox_node",
      select_edge,
     {
-    "response_node": "response_node",
+    "code_fixer_node": "code_fixer_node",
     "final_response_node": "final_response_node"
     }
 )

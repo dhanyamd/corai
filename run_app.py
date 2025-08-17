@@ -61,7 +61,7 @@ app.post('/api/users', (req, res) => {
 // PUT (update) a user by ID
 app.put('/api/users/:id', (req, res) => {
   const id = parseInt(req.params.id);
-  const { name, email } = req.body || {};
+  const { name, email } = req.body;
 
   let userFound = false;
   app.users = app.users.map(user => {

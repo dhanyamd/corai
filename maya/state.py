@@ -5,6 +5,7 @@ class CoraiAgentState(TypedDict):
     messages: List[BaseMessage]
     summary: str
     code: str
+    code_snippet: str
     retry_count: int
     sandbox_response: Optional[dict]
     sandbox_response_err: Optional[dict]
