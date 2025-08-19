@@ -112,7 +112,7 @@ def sandbox_node(state: CoraiAgentState):
         elif "cargo" in original_code_snippet.lower():
             language, test_runner, test_filename, module_filename = "rust", "cargo", "tests/integration_test.rs", "src/lib.rs"
         elif "public class" in original_code_snippet:
-            language, test_runner, test_filename, module_filename = "java", "junit", "Test.java", "Main.java"
+            language, test_runner, test_filename, module_filename = "java", "junit", "Test.java", "Main.java" 
 
         # --- Failsafe for Python ---
         if language == "python" and "def calculate_discount" in actual_code_to_run:
